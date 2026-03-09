@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: Smart Auth Dashboards
+    orgId: 1
+    folder: Smart Auth
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards

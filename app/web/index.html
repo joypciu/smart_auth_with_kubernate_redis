@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Auth Control Room</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <div class="noise"></div>
+  <div class="halo halo-one"></div>
+  <div class="halo halo-two"></div>
+
+  <main class="shell">
+    <section class="hero">
+      <div class="hero-copy panel">
+        <div class="eyebrow-row">
+          <p class="eyebrow">Operations Console</p>
+          <span class="status-chip" id="serviceStatus">Connecting</span>
+        </div>
+        <h1>Smart Auth Control Room</h1>
+        <p class="hero-text">
+          Live posture for authentication, traffic, OAuth readiness, and observability.
+          This screen is driven by backend state instead of static promo copy.
+        </p>
+        <div class="hero-actions">
+          <a class="action primary" id="linkDocs" href="/docs">API Docs</a>
+          <a class="action secondary" id="linkHealth" href="/api/v1/health">Health</a>
+          <a class="action secondary" id="linkMetrics" href="/metrics">Metrics</a>
+        </div>
+      </div>
+
+      <aside class="hero-side panel">
+        <div class="side-header">
+          <p class="eyebrow">Runtime</p>
+          <span class="muted" id="lastUpdatedValue">waiting for first sync</span>
+        </div>
+        <div class="runtime-grid">
+          <div class="runtime-card">
+            <span>Environment</span>
+            <strong id="environmentValue">loading</strong>
+          </div>
+          <div class="runtime-card">
+            <span>Uptime</span>
+            <strong id="uptimeValue">loading</strong>
+          </div>
+          <div class="runtime-card">
+            <span>API Mode</span>
+            <strong id="apiModeValue">loading</strong>
+          </div>
+          <div class="runtime-card">
+            <span>OAuth</span>
+            <strong id="oauthSummaryValue">loading</strong>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="metrics-grid">
+      <article class="metric panel accent-cyan">
+        <p class="metric-label">Total Requests</p>
+        <h2 id="totalRequestsValue">0</h2>
+        <span class="metric-foot">all requests observed by middleware</span>
+      </article>
+      <article class="metric panel accent-amber">
+        <p class="metric-label">Average Latency</p>
+        <h2 id="latencyValue">0 ms</h2>
+        <span class="metric-foot">mean request duration</span>
+      </article>
+      <article class="metric panel accent-red">
+        <p class="metric-label">Unhandled Exceptions</p>
+        <h2 id="exceptionValue">0</h2>
+        <span class="metric-foot">unexpected backend failures</span>
+      </article>
+      <article class="metric panel accent-violet">
+        <p class="metric-label">4xx / 5xx</p>
+        <h2><span id="clientErrorsValue">0</span> / <span id="serverErrorsValue">0</span></h2>
+        <span class="metric-foot">client and server error responses</span>
+      </article>
+    </section>
+
+    <section class="content-grid">
+      <article class="panel section-block">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Traffic View</p>
+            <h2>Most active routes</h2>
+          </div>
+          <span class="muted">live request distribution</span>
+        </div>
+        <div class="routes" id="topRoutes"></div>
+      </article>
+
+      <article class="panel section-block">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Security Posture</p>
+            <h2>Token and throttle policy</h2>
+          </div>
+        </div>
+        <div class="detail-grid">
+          <div class="detail-card">
+            <span>Access Token TTL</span>
+            <strong id="accessTtlValue">loading</strong>
+          </div>
+          <div class="detail-card">
+            <span>Refresh Token TTL</span>
+            <strong id="refreshTtlValue">loading</strong>
+          </div>
+          <div class="detail-card">
+            <span>Auth Rate Limit</span>
+            <strong id="rateLimitValue">loading</strong>
+          </div>
+          <div class="detail-card">
+            <span>CORS Origins</span>
+            <strong id="corsCountValue">loading</strong>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel section-block">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">OAuth Readiness</p>
+            <h2>Provider configuration</h2>
+          </div>
+        </div>
+        <div class="provider-list">
+          <div class="provider-card">
+            <div>
+              <h3>Google</h3>
+              <p>Identity provider for consumer-friendly login.</p>
+            </div>
+            <span class="provider-state" id="googleOauthState">Checking</span>
+          </div>
+          <div class="provider-card">
+            <div>
+              <h3>GitHub</h3>
+              <p>Developer-facing social login flow.</p>
+            </div>
+            <span class="provider-state" id="githubOauthState">Checking</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel section-block link-panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Operator Links</p>
+            <h2>Tooling surface</h2>
+          </div>
+        </div>
+        <div class="tool-list">
+          <a class="tool-link" id="linkPrometheus" target="_blank" rel="noreferrer">Prometheus</a>
+          <a class="tool-link" id="linkGrafana" target="_blank" rel="noreferrer">Grafana</a>
+          <a class="tool-link" href="/api/v1/auth/me">Protected Profile Route</a>
+          <a class="tool-link" href="/api/v1/system/overview">Overview JSON</a>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script src="/assets/app.js" defer></script>
+</body>
+</html>

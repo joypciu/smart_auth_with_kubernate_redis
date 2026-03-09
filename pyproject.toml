@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=69.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smart-auth-api"
+version = "0.1.0"
+description = "Beginner-friendly FastAPI authentication and rate-limiting API with JWT, OAuth, Redis, PostgreSQL, and Nginx"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "alembic>=1.14.0",
+  "asyncpg>=0.30.0",
+  "email-validator>=2.2.0",
+  "fastapi>=0.115.0",
+  "httpx>=0.28.0",
+  "prometheus-client>=0.22.0",
+  "pwdlib[argon2]>=0.2.1",
+  "pydantic-settings>=2.7.0",
+  "PyJWT>=2.10.0",
+  "psycopg[binary]>=3.2.0",
+  "python-multipart>=0.0.20",
+  "redis>=5.2.0",
+  "sqlalchemy>=2.0.36",
+  "structlog>=25.4.0",
+  "uvicorn[standard]>=0.34.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0",
+  "pytest-asyncio>=0.25.0"
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
