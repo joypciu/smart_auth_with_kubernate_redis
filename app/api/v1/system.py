@@ -3,7 +3,8 @@ from __future__ import annotations
 from time import time
 from typing import Any
 
-from fastapi import APIRouter
+import httpx
+from fastapi import APIRouter, HTTPException, Query
 
 from app.core.config import settings
 from app.core.metrics import APP_STARTED_AT, get_http_metrics_snapshot
@@ -45,3 +46,27 @@ async def system_overview() -> dict[str, Any]:
         },
         "traffic": metrics,
     }
+
+
+@router.get("/prometheus-query")
+async def prometheus_query(
+    query: str = Query(..., min_length=1, max_length=512),
+    start: float | None = None,
+    end: float | None = None,
+    step: str = Query(default="30s", max_length=16),
+) -> dict[str, Any]:
+    """Proxy Prometheus query_range to avoid browser CORS issues."""
+    now = time()
+    _end = end if end is not None else now
+    _start = start if start is not None else now - 3600
+
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                "http://prometheus:9090/api/v1/query_range",
+                params={"query": query, "start": _start, "end": _end, "step": step},
+                timeout=10.0,
+            )
+        return resp.json()
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=503, detail=f"Prometheus unreachable: {exc}") from exc

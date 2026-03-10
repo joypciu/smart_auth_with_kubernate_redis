@@ -30,6 +30,12 @@ class OAuthStartResponse(BaseModel):
     state: str
 
 
+class OAuthLinkResponse(BaseModel):
+    provider: str
+    linked: bool
+    user: UserRead
+
+
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str

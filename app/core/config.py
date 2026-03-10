@@ -31,15 +31,18 @@ class Settings(BaseSettings):
 
     rate_limit_auth_requests: int = 5
     rate_limit_auth_window_seconds: int = 60
+    rate_limit_fail_closed: bool = True
+    trust_proxy_headers: bool = False
+    trusted_proxy_cidrs: Annotated[list[str], NoDecode] = []
 
     google_client_id: str = ""
     google_client_secret: str = ""
     github_client_id: str = ""
     github_client_secret: str = ""
 
-    @field_validator("cors_origins", mode="before")
+    @field_validator("cors_origins", "trusted_proxy_cidrs", mode="before")
     @classmethod
-    def parse_cors_origins(cls, value: str | list[str]) -> list[str]:
+    def parse_csv_list(cls, value: str | list[str]) -> list[str]:
         if isinstance(value, str):
             return [item.strip() for item in value.split(",") if item.strip()]
         return value
@@ -76,6 +79,9 @@ class Settings(BaseSettings):
 
         if "@localhost" in self.database_url or "@127.0.0.1" in self.database_url:
             raise ValueError("DATABASE_URL cannot point to localhost in production")
+
+        if self.trust_proxy_headers and not self.trusted_proxy_cidrs:
+            raise ValueError("TRUSTED_PROXY_CIDRS must be set when TRUST_PROXY_HEADERS is enabled")
 
         return self
 

@@ -1,12 +1,14 @@
 # Smart Auth API
 
-Smart Auth API is a beginner-friendly but resume-grade backend project built with FastAPI, PostgreSQL, Redis, JWT, OAuth, Docker, and Nginx. It demonstrates the kind of architecture employers expect in 2026 for a modern backend service: typed API contracts, token-based authentication, OAuth login with Google and GitHub, database migrations, rate limiting, Dockerized local development, and clear deployment guidance.
+Smart Auth API is a beginner-friendly but resume-grade backend project built with FastAPI, PostgreSQL, Redis, JWT, OAuth, Docker, and Nginx. It demonstrates the kind of architecture employers expect in 2026 for a modern backend service: typed API contracts, token-based authentication, OAuth login with Google and GitHub, explicit OAuth account linking, database migrations, rate limiting, Dockerized local development, and clear deployment guidance.
 
 It now also includes structured JSON logging, Prometheus metrics, a Grafana API dashboard, and Kubernetes manifests so the project looks much closer to a modern production backend.
 
 It also includes GitHub Actions workflows for CI and Docker image publishing so the repository can automatically test the app and publish a container image to GitHub Container Registry.
 
 The internal code structure is also organized to stay scalable: API routes stay thin, business rules live in services, and database access is moving through repository-style classes so features can be changed without rewriting the whole app.
+
+This repository is designed to be strong for learning and portfolio use, not to claim perfect production security. The current version adds safer OAuth linking rules, fail-closed auth throttling, a non-root container image, and Kubernetes network and runtime hardening so the security story is much more realistic for study and interview discussion.
 
 ## Small Architecture Diagram
 
@@ -39,6 +41,7 @@ This is the fastest way to run the project locally.
 - Docker Desktop installed and running
 - Python already installed on your machine if you want to run commands like tests or Alembic locally
 - A `.env` file created from `.env.example`
+- A private `local-access-notes.txt` file is available for your own passwords, callback URLs, and access notes, and it is ignored by git
 
 ### 1. Create the environment file
 
@@ -51,6 +54,8 @@ PowerShell:
 This generates a local `.env` with a strong `SECRET_KEY`, a non-default PostgreSQL password,
 and a non-default Grafana admin password. Add your OAuth client credentials afterward if you
 want Google or GitHub login to work locally.
+
+Use `local-access-notes.txt` for the sensitive values and URLs you want to remember locally without committing them.
 
 ### 2. Start all services
 
@@ -94,6 +99,15 @@ Note:
 - Grafana login now uses the generated values from `.env` instead of a shared default admin password.
 - Prometheus and Grafana host ports are configurable through `PROMETHEUS_PORT` and `GRAFANA_PORT` if those defaults are already in use on your machine.
 
+## Security Posture
+
+- Passwords are hashed with Argon2 through `pwdlib`.
+- Refresh tokens are stored server-side and rotated on refresh.
+- OAuth login no longer auto-links to an existing local account by email. Existing users must authenticate first and use the explicit OAuth link flow.
+- Auth rate limiting can fail closed when Redis is unavailable.
+- Proxy headers are only trusted when you explicitly enable `TRUST_PROXY_HEADERS` and define `TRUSTED_PROXY_CIDRS`.
+- The Docker image now runs as a non-root user, and the Kubernetes deployment adds runtime security controls and a network policy.
+
 ## Troubleshooting
 
 | Symptom                                                                         | Likely cause                                                                                  | What to do                                                                                                                                            |
@@ -102,7 +116,9 @@ Note:
 | `api` container keeps restarting                                                | Missing or invalid values in `.env`                                                           | Re-run `./scripts/bootstrap-local-env.ps1`, then compare your `.env` against `.env.example`.                                                          |
 | `PUBLIC_BACKEND_URL must use HTTPS in production`                               | `APP_ENV=production` is set while using a local `http://` URL                                 | For local work, use `APP_ENV=development`. Reserve production mode for real HTTPS deployments.                                                        |
 | OAuth login returns provider or callback errors                                 | Google or GitHub client ID/secret is missing or callback URL does not match provider settings | Update the OAuth values in `.env` and make sure the provider callback exactly matches the URL documented in the app config.                           |
-| Rate limiting or OAuth state behaves strangely                                  | Redis is not running or not reachable from the API                                            | Check `docker compose ps`, then inspect Redis with `docker compose logs redis`.                                                                       |
+| OAuth login returns `409` for an existing email                                 | Existing local accounts must use the explicit link flow                                       | Sign in normally first, then start `/api/v1/auth/oauth/{provider}/link` so the provider account is linked intentionally.                              |
+| Rate limiting or OAuth state behaves strangely                                  | Redis is not running or not reachable from the API                                            | Check `docker compose ps`, then inspect Redis with `docker compose logs redis`. Auth endpoints now fail closed when Redis is unavailable.             |
+| All users appear to share one rate-limit bucket behind a reverse proxy          | Proxy headers are disabled or the proxy source IP is not in `TRUSTED_PROXY_CIDRS`             | Enable `TRUST_PROXY_HEADERS=true` only behind a trusted proxy and set `TRUSTED_PROXY_CIDRS` to the proxy network ranges that can reach the API.       |
 | Login works but refresh/logout does not                                         | Database migrations were not applied                                                          | Run `docker compose exec api alembic upgrade head` and retry.                                                                                         |
 | Prometheus or Grafana does not open                                             | Host port is already in use                                                                   | Change `PROMETHEUS_PORT` or `GRAFANA_PORT` in `.env`, then restart with `docker compose up -d --build`.                                               |
 | Dashboard loads but looks empty                                                 | The overview endpoint is unavailable or the API is still starting                             | Open `http://localhost:8000/api/v1/system/overview` directly and confirm it returns JSON.                                                             |
@@ -248,8 +264,21 @@ After the provider redirects back, the backend callback endpoint:
 
 - validates the temporary `state` from Redis
 - exchanges the provider code for user identity data
-- creates or updates the local user
+- signs in an already linked OAuth user or creates a new user when the email is not already in use
 - returns JWT tokens for your API
+
+### 8. Link Google or GitHub to an existing account
+
+Call one of these after you are already authenticated with a bearer token:
+
+- `GET http://localhost/api/v1/auth/oauth/google/link`
+- `GET http://localhost/api/v1/auth/oauth/github/link`
+
+What it does:
+
+- creates a short-lived state value tied to your current user ID
+- redirects you to the provider using a dedicated link callback URL
+- links the provider account only to the authenticated local user that started the flow
 
 ## Start Without Docker
 
@@ -479,12 +508,14 @@ The project is organized around a few simple ideas:
 1. The client requests `/api/v1/auth/oauth/{provider}/login`.
 2. The API generates a provider URL and stores a secure `state` value in Redis.
 3. The provider redirects back to `/api/v1/auth/oauth/{provider}/callback`.
-4. The backend exchanges the code for provider user info, creates or updates the local user, and issues JWT tokens.
+4. The backend exchanges the code for provider user info, then either signs in an already linked user or creates a new one when that email is not already claimed.
+5. If the email already belongs to a local account, the user must authenticate first and use `/api/v1/auth/oauth/{provider}/link`.
 
 ### Rate limiting
 
 - Auth endpoints are protected with Redis-backed per-IP rate limiting.
-- If Redis is temporarily unavailable, rate limiting fails open so the API still works during local development.
+- If Redis is temporarily unavailable, auth endpoints can fail closed instead of silently dropping brute-force protection.
+- `X-Forwarded-For` is only trusted when the caller is a trusted reverse proxy from `TRUSTED_PROXY_CIDRS`.
 
 ## Important Environment Variables
 
@@ -494,6 +525,8 @@ The project is organized around a few simple ideas:
 - `REDIS_URL`: tells the API how to connect to Redis
 - `PUBLIC_BACKEND_URL`: used to build OAuth callback URLs
 - `CORS_ORIGINS`: controls which frontend origins are allowed to call the API from a browser
+- `RATE_LIMIT_FAIL_CLOSED`: decides whether auth endpoints return `503` when Redis throttling is unavailable
+- `TRUST_PROXY_HEADERS` and `TRUSTED_PROXY_CIDRS`: control when forwarded client IP headers should be trusted
 - `GRAFANA_ADMIN_USER` and `GRAFANA_ADMIN_PASSWORD`: control local Grafana login credentials
 - `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`: enable Google login
 - `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`: enable GitHub login
@@ -709,19 +742,116 @@ Use these ideas in your README summary, LinkedIn post, or interview explanation:
 - Added GitHub Actions CI to automatically run tests and validate Docker builds.
 - Added GitHub Actions publishing to push Docker images to GitHub Container Registry.
 
-## Future Improvements
+## Planned Features
 
-- Add email verification so users must prove they own the email address.
-- Add password reset flow so forgotten passwords can be changed securely.
-- Add role-based authorization so some routes can be limited to admins.
-- Add account lockout or smarter anti-bruteforce rules for repeated failed logins.
-- Add audit logs to track sensitive actions like login, logout, and token refresh.
+These are the next meaningful additions to this project. Each one extends the authentication foundation that already exists without needing to replace any part of the current stack.
+
+### 1. Role-Based Access Control (RBAC)
+
+Users will be assigned roles such as `admin`, `editor`, and `viewer`. Each role will carry a set of named permissions. Protected routes will check permissions rather than only checking whether the user is logged in.
+
+What this adds:
+
+- a `roles` and `permissions` table in PostgreSQL
+- a `require_permission("users:delete")` FastAPI dependency that can be applied to any route
+- admin-only endpoints for managing users and roles
+- a natural extension to the existing `User` model and `deps.py` injection pattern
+
+Why it matters:
+
+- Authentication answers "who are you?" but authorization answers "what are you allowed to do?" — this feature completes the access control story.
+- Almost every real multi-user system needs this. It is one of the most commonly asked-about topics in backend interviews.
+
+### 2. Audit Log
+
+Every security-significant action — login, failed login, logout, token refresh, password change, OAuth link — will be written to an `audit_events` table with the timestamp, user ID, IP address, user agent, and outcome.
+
+What this adds:
+
+- an `AuditEvent` SQLAlchemy model and migration
+- a background task writer so the audit write does not slow down the main request
+- a `/api/v1/admin/audit-log` endpoint paginated by user or time range
+
+Why it matters:
+
+- Audit logs are required for SOC 2 and GDPR compliance in production systems.
+- They make the security story of the project much more complete.
+- They turn abstracted auth events into something visible and queryable, which is useful for a thesis demonstration.
+
+### 3. API Key Management
+
+Users or service accounts will be able to generate named API keys with defined scopes and optional expiry dates. Callers authenticate using `Authorization: Bearer <api-key>` instead of a short-lived JWT.
+
+What this adds:
+
+- an `api_keys` table that stores only the key hash, never the raw key
+- a key generation endpoint that shows the raw key exactly once on creation
+- per-key scope enforcement using the same permission dependency used by RBAC
+- per-key request tracking visible in Prometheus metrics
+
+Why it matters:
+
+- This is how Stripe, GitHub, and AWS handle machine-to-machine authentication. It is a completely separate auth flow from user JWTs and teaches a distinct set of skills.
+- It makes the project useful as a model for service-to-service auth, not only user login.
+
+### 4. Two-Factor Authentication (TOTP)
+
+Users who enable 2FA will be required to submit a 6-digit time-based one-time password from an authenticator app as a second step after entering their email and password. The implementation follows RFC 6238, the same standard used by Google, GitHub, and most major services.
+
+What this adds:
+
+- a `totp_secret` column on the user table
+- `/api/v1/auth/2fa/setup` to generate a QR code and secret
+- `/api/v1/auth/2fa/verify` to confirm setup and enable 2FA
+- a two-step login flow where step one returns a short-lived challenge token stored in Redis and step two validates the TOTP code before issuing real JWT tokens
+
+Why it matters:
+
+- 2FA is one of the most effective controls against credential-based attacks.
+- Implementing it correctly requires understanding partial sessions, challenge state, and time-window tolerance, which makes it a strong learning topic.
+
+### 5. Webhook Delivery
+
+When notable events occur — `user.registered`, `user.login`, `password.reset`, `api_key.created` — the system will POST a signed JSON payload to URLs that admins or users have registered.
+
+What this adds:
+
+- a `webhooks` table of registered endpoint URLs and their event subscriptions
+- a Redis-backed delivery queue with exponential backoff retries on failure
+- `X-Signature-256` header signing using HMAC so receivers can verify the payload is genuine
+- a delivery log showing recent attempts and outcomes
+
+Why it matters:
+
+- Webhooks are the integration layer of nearly every SaaS product.
+- Reliable delivery with retries and signature verification is a distinct engineering skill from standard REST API design.
+- It makes the project useful as a model for event-driven system integration.
+
+---
+
+### Planned implementation order
+
+| Step | Feature                   | Rationale                                                                    |
+| ---- | ------------------------- | ---------------------------------------------------------------------------- |
+| 1    | RBAC                      | Completes the access control story; needed before admin endpoints make sense |
+| 2    | Audit Log                 | Builds on RBAC events; adds compliance value immediately                     |
+| 3    | API Key Management        | Introduces machine-to-machine auth as a separate flow from user JWTs         |
+| 4    | Two-Factor Authentication | Strengthens the user login flow with a second factor                         |
+| 5    | Webhook Delivery          | Adds event-driven integration on top of the complete auth foundation         |
+
+---
+
+## Other Improvements
+
+- Add email verification so users must prove they own the email address before the account is activated.
+- Add password reset flow so forgotten passwords can be changed securely via a signed reset link.
+- Add account lockout rules for repeated failed login attempts beyond the current rate-limit window.
 - Add integration tests that run against a temporary PostgreSQL and Redis stack.
-- Add OpenTelemetry tracing and Tempo or Jaeger for distributed tracing.
-- Add Loki or another centralized log store so Grafana can explore logs too.
-- Add email provider support for system emails such as verification and password reset.
-- Add user profile update endpoints and account deletion flow.
-- Add frontend client example in React or Next.js to demonstrate end-to-end login.
+- Add OpenTelemetry tracing and Tempo or Jaeger for distributed tracing across service boundaries.
+- Add Loki or another centralized log store so Grafana can explore structured logs alongside metrics.
+- Add email provider support for system emails such as verification links and password reset.
+- Add user profile update endpoints and a secure account deletion flow.
+- Add a frontend client example in React or Next.js to demonstrate the full end-to-end login experience.
 
 ## Docker Cleanup
 

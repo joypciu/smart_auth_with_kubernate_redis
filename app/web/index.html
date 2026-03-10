@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -13,156 +13,344 @@
   <div class="noise"></div>
   <div class="halo halo-one"></div>
   <div class="halo halo-two"></div>
+  <div id="toast" class="toast" aria-live="polite"></div>
 
   <main class="shell">
-    <section class="hero">
-      <div class="hero-copy panel">
-        <div class="eyebrow-row">
-          <p class="eyebrow">Operations Console</p>
-          <span class="status-chip" id="serviceStatus">Connecting</span>
+
+    <!-- ── Top bar ─────────────────────────────── -->
+    <header class="top-bar">
+      <div class="brand">
+        <p class="eyebrow">Operations Console</p>
+        <span class="brand-name">Smart Auth Control Room</span>
+      </div>
+      <div class="top-bar-right">
+        <span class="status-chip" id="serviceStatus">Connecting</span>
+        <span class="muted small" id="lastUpdatedValue">—</span>
+      </div>
+    </header>
+
+    <!-- ── Tab nav ────────────────────────────── -->
+    <nav class="tab-nav" role="tablist" aria-label="Dashboard sections">
+      <button class="tab-btn active" role="tab" data-tab="overview" aria-selected="true">Overview</button>
+      <button class="tab-btn"         role="tab" data-tab="auth"     aria-selected="false">Auth Lab</button>
+      <button class="tab-btn"         role="tab" data-tab="charts"   aria-selected="false">Live Charts</button>
+      <button class="tab-btn"         role="tab" data-tab="monitoring" aria-selected="false">Monitoring</button>
+    </nav>
+
+    <!-- ════════════════════════════════════════ -->
+    <!-- TAB: OVERVIEW                           -->
+    <!-- ════════════════════════════════════════ -->
+    <section class="tab-panel" id="tab-overview" role="tabpanel">
+
+      <div class="hero">
+        <div class="hero-copy panel">
+          <div class="eyebrow-row">
+            <p class="eyebrow">Live Posture</p>
+          </div>
+          <h1>Smart Auth<br>API</h1>
+          <p class="hero-text">
+            Real-time view of authentication, traffic, OAuth readiness, and observability.
+            All data is pulled live from the backend — nothing is static.
+          </p>
+          <div class="hero-actions">
+            <a class="action primary" href="/docs" target="_blank" rel="noreferrer">API Docs</a>
+            <a class="action secondary" href="/api/v1/health" target="_blank" rel="noreferrer">Health</a>
+            <a class="action secondary" href="/metrics" target="_blank" rel="noreferrer">Metrics</a>
+          </div>
         </div>
-        <h1>Smart Auth Control Room</h1>
-        <p class="hero-text">
-          Live posture for authentication, traffic, OAuth readiness, and observability.
-          This screen is driven by backend state instead of static promo copy.
-        </p>
-        <div class="hero-actions">
-          <a class="action primary" id="linkDocs" href="/docs">API Docs</a>
-          <a class="action secondary" id="linkHealth" href="/api/v1/health">Health</a>
-          <a class="action secondary" id="linkMetrics" href="/metrics">Metrics</a>
+
+        <aside class="hero-side panel">
+          <div class="side-header">
+            <p class="eyebrow">Runtime</p>
+          </div>
+          <div class="runtime-grid">
+            <div class="runtime-card"><span>Environment</span><strong id="environmentValue">loading</strong></div>
+            <div class="runtime-card"><span>Uptime</span><strong id="uptimeValue">loading</strong></div>
+            <div class="runtime-card"><span>API Mode</span><strong id="apiModeValue">loading</strong></div>
+            <div class="runtime-card"><span>OAuth</span><strong id="oauthSummaryValue">loading</strong></div>
+          </div>
+        </aside>
+      </div>
+
+      <section class="metrics-grid">
+        <article class="metric panel accent-cyan">
+          <p class="metric-label">Total Requests</p>
+          <h2 id="totalRequestsValue">0</h2>
+          <span class="metric-foot">all requests observed by middleware</span>
+        </article>
+        <article class="metric panel accent-amber">
+          <p class="metric-label">Average Latency</p>
+          <h2 id="latencyValue">0 ms</h2>
+          <span class="metric-foot">mean request duration</span>
+        </article>
+        <article class="metric panel accent-red">
+          <p class="metric-label">Exceptions</p>
+          <h2 id="exceptionValue">0</h2>
+          <span class="metric-foot">unhandled backend failures</span>
+        </article>
+        <article class="metric panel accent-violet">
+          <p class="metric-label">4xx / 5xx</p>
+          <h2><span id="clientErrorsValue">0</span> / <span id="serverErrorsValue">0</span></h2>
+          <span class="metric-foot">client and server error responses</span>
+        </article>
+      </section>
+
+      <div class="content-grid">
+        <article class="panel section-block">
+          <div class="section-heading">
+            <div><p class="eyebrow">Traffic View</p><h2>Most active routes</h2></div>
+            <span class="muted">live distribution</span>
+          </div>
+          <div class="routes" id="topRoutes"></div>
+        </article>
+
+        <article class="panel section-block">
+          <div class="section-heading">
+            <div><p class="eyebrow">Security Posture</p><h2>Token and throttle policy</h2></div>
+          </div>
+          <div class="detail-grid">
+            <div class="detail-card"><span>Access Token TTL</span><strong id="accessTtlValue">loading</strong></div>
+            <div class="detail-card"><span>Refresh Token TTL</span><strong id="refreshTtlValue">loading</strong></div>
+            <div class="detail-card"><span>Auth Rate Limit</span><strong id="rateLimitValue">loading</strong></div>
+            <div class="detail-card"><span>CORS Origins</span><strong id="corsCountValue">loading</strong></div>
+          </div>
+        </article>
+
+        <article class="panel section-block">
+          <div class="section-heading">
+            <div><p class="eyebrow">OAuth Readiness</p><h2>Provider configuration</h2></div>
+          </div>
+          <div class="provider-list">
+            <div class="provider-card">
+              <div><h3>Google</h3><p>Consumer-friendly identity login.</p></div>
+              <span class="provider-state" id="googleOauthState">Checking</span>
+            </div>
+            <div class="provider-card">
+              <div><h3>GitHub</h3><p>Developer-facing social login flow.</p></div>
+              <span class="provider-state" id="githubOauthState">Checking</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel section-block link-panel">
+          <div class="section-heading">
+            <div><p class="eyebrow">Operator Links</p><h2>Tooling surface</h2></div>
+          </div>
+          <div class="tool-list">
+            <a class="tool-link" id="linkPrometheus" target="_blank" rel="noreferrer">Prometheus →</a>
+            <a class="tool-link" id="linkGrafana" target="_blank" rel="noreferrer">Grafana →</a>
+            <a class="tool-link" href="/api/v1/auth/me" target="_blank" rel="noreferrer">Protected /me →</a>
+            <a class="tool-link" href="/api/v1/system/overview" target="_blank" rel="noreferrer">Overview JSON →</a>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════ -->
+    <!-- TAB: AUTH LAB                           -->
+    <!-- ════════════════════════════════════════ -->
+    <section class="tab-panel hidden" id="tab-auth" role="tabpanel">
+      <div class="auth-layout">
+
+        <!-- Left column: Register + Login forms -->
+        <div class="auth-forms-col">
+          <div class="panel section-block">
+            <p class="eyebrow">New Account</p>
+            <h2 style="margin-bottom:20px">Register</h2>
+            <form id="registerForm" class="auth-form" novalidate>
+              <label class="field-label">Email
+                <input type="email" name="email" required placeholder="you@example.com">
+              </label>
+              <label class="field-label">Full Name
+                <input type="text" name="full_name" required placeholder="Jane Doe" minlength="2">
+              </label>
+              <label class="field-label">Password
+                <input type="password" name="password" required placeholder="Min 8 characters" minlength="8">
+              </label>
+              <button type="submit" class="action primary full-w" id="registerBtn">Create Account</button>
+            </form>
+          </div>
+
+          <div class="panel section-block">
+            <p class="eyebrow">Sign In</p>
+            <h2 style="margin-bottom:20px">Login</h2>
+            <form id="loginForm" class="auth-form" novalidate>
+              <label class="field-label">Email
+                <input type="email" name="email" required placeholder="you@example.com">
+              </label>
+              <label class="field-label">Password
+                <input type="password" name="password" required placeholder="Password" minlength="8">
+              </label>
+              <button type="submit" class="action primary full-w" id="loginBtn">Sign In</button>
+            </form>
+          </div>
+
+          <!-- Quick API tester -->
+          <div class="panel section-block">
+            <p class="eyebrow">API Tester</p>
+            <h2 style="margin-bottom:16px">Call any route</h2>
+            <p class="muted small" style="margin-bottom:12px">Automatically injects your Bearer token if you are logged in.</p>
+            <div class="tester-row">
+              <select id="testerMethod" class="tester-select">
+                <option>GET</option>
+                <option>POST</option>
+                <option>DELETE</option>
+              </select>
+              <input type="text" id="testerPath" class="tester-input" value="/api/v1/auth/me" placeholder="/api/v1/...">
+              <button class="action primary small-btn" id="testerSendBtn">Send</button>
+            </div>
+            <div id="testerBodyRow" style="display:none;margin-top:10px">
+              <textarea id="testerBody" class="tester-body" rows="4" placeholder='{"key": "value"}'></textarea>
+            </div>
+            <pre class="tester-out hidden" id="testerOut"></pre>
+          </div>
+        </div>
+
+        <!-- Right column: Session state + Rate limit -->
+        <div class="auth-state-col">
+          <div class="panel section-block">
+            <div class="section-heading" style="margin-bottom:18px">
+              <div><p class="eyebrow">Current Session</p><h2>Token State</h2></div>
+              <button class="action secondary small-btn" id="logoutBtn" disabled>Logout</button>
+            </div>
+            <div id="noSession" class="empty-state">No active session. Register or login to begin.</div>
+            <div id="sessionData" class="hidden">
+              <div class="user-banner" id="userBanner"></div>
+              <div class="token-box">
+                <div class="token-row">
+                  <span class="token-label">Access Token (JWT)</span>
+                  <span class="token-expiry" id="tokenExpiry">—</span>
+                </div>
+                <div class="token-value" id="accessTokenDisplay">—</div>
+                <button class="copy-btn" id="copyTokenBtn">Copy full token</button>
+              </div>
+              <div class="detail-grid" style="margin-top:14px">
+                <div class="detail-card"><span>User ID</span><strong id="meId">—</strong></div>
+                <div class="detail-card"><span>Verified</span><strong id="meVerified">—</strong></div>
+                <div class="detail-card"><span>Active</span><strong id="meActive">—</strong></div>
+                <div class="detail-card"><span>Joined</span><strong id="meCreated">—</strong></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Rate limit tracker -->
+          <div class="panel section-block">
+            <p class="eyebrow">Rate Limit Tracker</p>
+            <h2 style="margin-bottom:16px">Auth throttle</h2>
+            <div class="rl-bar-wrap">
+              <div class="rl-bar" id="rlBar" style="width:0%"></div>
+            </div>
+            <div class="rl-meta">
+              <span id="rlUsed">0 used</span>
+              <span id="rlLimit">of 5 per 60s</span>
+            </div>
+            <div class="detail-card" style="margin-top:14px;text-align:center">
+              <span>Window resets in</span>
+              <strong id="rlCountdown">60s</strong>
+            </div>
+          </div>
+
+          <!-- Quick-fills -->
+          <div class="panel section-block">
+            <p class="eyebrow">Test Credentials</p>
+            <h2 style="margin-bottom:14px">Seeded Users</h2>
+            <p class="muted small" style="margin-bottom:14px">Click to auto-fill the login form.</p>
+            <div class="seed-list" id="seedList">
+              <button class="seed-btn" data-email="admin@example.com" data-pw="Admin1234!">admin@example.com</button>
+              <button class="seed-btn" data-email="alice@example.com" data-pw="Alice1234!">alice@example.com</button>
+              <button class="seed-btn" data-email="bob@example.com"   data-pw="BobPass1234!">bob@example.com</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════ -->
+    <!-- TAB: LIVE CHARTS                        -->
+    <!-- ════════════════════════════════════════ -->
+    <section class="tab-panel hidden" id="tab-charts" role="tabpanel">
+      <div class="charts-header panel section-block" style="margin-bottom:20px">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Prometheus • 1 hour window • auto-refreshes every 30s</p>
+            <h2>Live Metrics from Prometheus</h2>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <span class="status-chip" id="promStatus">Loading</span>
+            <button class="action secondary small-btn" id="chartsRefreshBtn">Refresh now</button>
+          </div>
         </div>
       </div>
 
-      <aside class="hero-side panel">
-        <div class="side-header">
-          <p class="eyebrow">Runtime</p>
-          <span class="muted" id="lastUpdatedValue">waiting for first sync</span>
+      <div class="charts-grid">
+        <div class="panel section-block chart-panel">
+          <p class="eyebrow">Request Rate</p>
+          <h2 class="chart-title">Requests / second</h2>
+          <canvas id="chartRequestRate"></canvas>
         </div>
-        <div class="runtime-grid">
-          <div class="runtime-card">
-            <span>Environment</span>
-            <strong id="environmentValue">loading</strong>
-          </div>
-          <div class="runtime-card">
-            <span>Uptime</span>
-            <strong id="uptimeValue">loading</strong>
-          </div>
-          <div class="runtime-card">
-            <span>API Mode</span>
-            <strong id="apiModeValue">loading</strong>
-          </div>
-          <div class="runtime-card">
-            <span>OAuth</span>
-            <strong id="oauthSummaryValue">loading</strong>
+
+        <div class="panel section-block chart-panel">
+          <p class="eyebrow">Latency</p>
+          <h2 class="chart-title">p95 response time (ms)</h2>
+          <canvas id="chartLatency"></canvas>
+        </div>
+
+        <div class="panel section-block chart-panel">
+          <p class="eyebrow">Error Rate</p>
+          <h2 class="chart-title">4xx + 5xx per second</h2>
+          <canvas id="chartErrors"></canvas>
+        </div>
+
+        <div class="panel section-block">
+          <p class="eyebrow">Prometheus Instant</p>
+          <h2 class="chart-title" style="margin-bottom:20px">Current totals</h2>
+          <div class="instant-grid">
+            <div class="instant-card"><span>Total Requests</span><strong id="instTotal">—</strong></div>
+            <div class="instant-card"><span>Exceptions</span><strong id="instExc">—</strong></div>
+            <div class="instant-card"><span>Success Rate</span><strong id="instSuccess">—</strong></div>
+            <div class="instant-card accent-source"><span>Data Source</span><strong>Prometheus</strong></div>
           </div>
         </div>
-      </aside>
+      </div>
     </section>
 
-    <section class="metrics-grid">
-      <article class="metric panel accent-cyan">
-        <p class="metric-label">Total Requests</p>
-        <h2 id="totalRequestsValue">0</h2>
-        <span class="metric-foot">all requests observed by middleware</span>
-      </article>
-      <article class="metric panel accent-amber">
-        <p class="metric-label">Average Latency</p>
-        <h2 id="latencyValue">0 ms</h2>
-        <span class="metric-foot">mean request duration</span>
-      </article>
-      <article class="metric panel accent-red">
-        <p class="metric-label">Unhandled Exceptions</p>
-        <h2 id="exceptionValue">0</h2>
-        <span class="metric-foot">unexpected backend failures</span>
-      </article>
-      <article class="metric panel accent-violet">
-        <p class="metric-label">4xx / 5xx</p>
-        <h2><span id="clientErrorsValue">0</span> / <span id="serverErrorsValue">0</span></h2>
-        <span class="metric-foot">client and server error responses</span>
-      </article>
+    <!-- ════════════════════════════════════════ -->
+    <!-- TAB: MONITORING                         -->
+    <!-- ════════════════════════════════════════ -->
+    <section class="tab-panel hidden" id="tab-monitoring" role="tabpanel">
+      <div class="panel section-block" style="margin-bottom:20px">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Embedded Grafana • Smart Auth API Observability</p>
+            <h2>Dashboard Panels</h2>
+          </div>
+          <div style="display:flex;gap:10px">
+            <a class="action primary small-btn" id="grafanaFullLink" target="_blank" rel="noreferrer">Open full dashboard →</a>
+            <a class="action secondary small-btn" id="prometheusLink" target="_blank" rel="noreferrer">Open Prometheus →</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="grafana-panels-grid">
+        <div class="panel grafana-panel-wrap">
+          <p class="eyebrow" style="padding:14px 18px 0">p95 Response Time by Route</p>
+          <iframe id="grafanaPanel3" class="grafana-iframe" src="" frameborder="0" loading="lazy" title="p95 Response Time by Route"></iframe>
+        </div>
+        <div class="panel grafana-panel-wrap">
+          <p class="eyebrow" style="padding:14px 18px 0">Request Rate (stat)</p>
+          <iframe id="grafanaPanel1" class="grafana-iframe" src="" frameborder="0" loading="lazy" title="Request Rate"></iframe>
+        </div>
+      </div>
+
+      <div class="panel grafana-panel-wrap" style="margin-top:20px">
+        <p class="eyebrow" style="padding:14px 18px 0">Requests by Method, Route &amp; Status</p>
+        <iframe id="grafanaPanel4" class="grafana-iframe tall" src="" frameborder="0" loading="lazy" title="Requests Table"></iframe>
+      </div>
     </section>
 
-    <section class="content-grid">
-      <article class="panel section-block">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">Traffic View</p>
-            <h2>Most active routes</h2>
-          </div>
-          <span class="muted">live request distribution</span>
-        </div>
-        <div class="routes" id="topRoutes"></div>
-      </article>
-
-      <article class="panel section-block">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">Security Posture</p>
-            <h2>Token and throttle policy</h2>
-          </div>
-        </div>
-        <div class="detail-grid">
-          <div class="detail-card">
-            <span>Access Token TTL</span>
-            <strong id="accessTtlValue">loading</strong>
-          </div>
-          <div class="detail-card">
-            <span>Refresh Token TTL</span>
-            <strong id="refreshTtlValue">loading</strong>
-          </div>
-          <div class="detail-card">
-            <span>Auth Rate Limit</span>
-            <strong id="rateLimitValue">loading</strong>
-          </div>
-          <div class="detail-card">
-            <span>CORS Origins</span>
-            <strong id="corsCountValue">loading</strong>
-          </div>
-        </div>
-      </article>
-
-      <article class="panel section-block">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">OAuth Readiness</p>
-            <h2>Provider configuration</h2>
-          </div>
-        </div>
-        <div class="provider-list">
-          <div class="provider-card">
-            <div>
-              <h3>Google</h3>
-              <p>Identity provider for consumer-friendly login.</p>
-            </div>
-            <span class="provider-state" id="googleOauthState">Checking</span>
-          </div>
-          <div class="provider-card">
-            <div>
-              <h3>GitHub</h3>
-              <p>Developer-facing social login flow.</p>
-            </div>
-            <span class="provider-state" id="githubOauthState">Checking</span>
-          </div>
-        </div>
-      </article>
-
-      <article class="panel section-block link-panel">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">Operator Links</p>
-            <h2>Tooling surface</h2>
-          </div>
-        </div>
-        <div class="tool-list">
-          <a class="tool-link" id="linkPrometheus" target="_blank" rel="noreferrer">Prometheus</a>
-          <a class="tool-link" id="linkGrafana" target="_blank" rel="noreferrer">Grafana</a>
-          <a class="tool-link" href="/api/v1/auth/me">Protected Profile Route</a>
-          <a class="tool-link" href="/api/v1/system/overview">Overview JSON</a>
-        </div>
-      </article>
-    </section>
   </main>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="/assets/app.js" defer></script>
 </body>
 </html>

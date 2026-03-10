@@ -7,10 +7,10 @@ from fastapi import APIRouter, Depends, Path, status
 from app.api.deps import CurrentUser, DbSession, RedisClient
 from app.core.config import settings
 from app.core.rate_limiter import rate_limit
-from app.schemas.auth import LoginRequest, LogoutRequest, OAuthStartResponse, RefreshRequest, RegisterRequest, TokenResponse
+from app.schemas.auth import LoginRequest, LogoutRequest, OAuthLinkResponse, OAuthStartResponse, RefreshRequest, RegisterRequest, TokenResponse
 from app.schemas.user import UserRead
 from app.services.auth_service import authenticate_user, issue_token_pair, logout_refresh_token, refresh_access_pair, register_user
-from app.services.oauth_service import exchange_code_for_identity, get_authorization_url, upsert_oauth_user
+from app.services.oauth_service import build_authorization_url, exchange_code_for_identity, get_or_create_oauth_user, link_oauth_account_to_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -53,7 +53,20 @@ async def oauth_login(
     provider: Annotated[str, Path(pattern="^(google|github)$")],
     redis: RedisClient,
 ) -> OAuthStartResponse:
-    return await get_authorization_url(provider, redis)
+    return await build_authorization_url(provider, redis, flow="login")
+
+
+@router.get(
+    "/oauth/{provider}/link",
+    response_model=OAuthStartResponse,
+    dependencies=[Depends(auth_limit)],
+)
+async def oauth_link(
+    provider: Annotated[str, Path(pattern="^(google|github)$")],
+    redis: RedisClient,
+    current_user: CurrentUser,
+) -> OAuthStartResponse:
+    return await build_authorization_url(provider, redis, flow="link", user_id=str(current_user.id))
 
 
 @router.get(
@@ -68,6 +81,23 @@ async def oauth_callback(
     db: DbSession,
     redis: RedisClient,
 ) -> TokenResponse:
-    identity = await exchange_code_for_identity(provider, code, state, redis)
-    user = await upsert_oauth_user(db, provider, identity)
+    identity, _ = await exchange_code_for_identity(provider, code, state, redis, expected_flow="login")
+    user = await get_or_create_oauth_user(db, provider, identity)
     return await issue_token_pair(db, user)
+
+
+@router.get(
+    "/oauth/{provider}/link/callback",
+    response_model=OAuthLinkResponse,
+    dependencies=[Depends(auth_limit)],
+)
+async def oauth_link_callback(
+    provider: Annotated[str, Path(pattern="^(google|github)$")],
+    code: str,
+    state: str,
+    db: DbSession,
+    redis: RedisClient,
+) -> OAuthLinkResponse:
+    identity, state_payload = await exchange_code_for_identity(provider, code, state, redis, expected_flow="link")
+    user = await link_oauth_account_to_user(db, provider, identity, state_payload.user_id)
+    return OAuthLinkResponse(provider=provider, linked=True, user=UserRead.model_validate(user))
