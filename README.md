@@ -10,6 +10,40 @@ The internal code structure is also organized to stay scalable: API routes stay 
 
 This repository is designed to be strong for learning and portfolio use, not to claim perfect production security. The current version adds safer OAuth linking rules, fail-closed auth throttling, a non-root container image, and Kubernetes network and runtime hardening so the security story is much more realistic for study and interview discussion.
 
+## What You Will Learn
+
+This project is structured so that studying and running it gives you hands-on experience with a set of backend engineering skills that come up repeatedly in interviews and real jobs.
+
+### Authentication and security
+
+- How to hash passwords correctly using Argon2 and why MD5 or SHA-256 alone are not safe for passwords
+- How JWT access tokens work: what is inside them, why they are stateless, and what their expiry means
+- How refresh token rotation works and why it is safer than a single long-lived token
+- How OAuth2 works end-to-end: the authorization code flow, the `state` parameter, and why auto-linking by email is a security risk
+- How Redis-backed rate limiting stops brute-force attacks and what fail-closed behavior means
+
+### Backend architecture
+
+- How to structure a FastAPI project with thin routes, a service layer, and a repository layer
+- How Pydantic schemas enforce typed API contracts at the boundary between HTTP and Python
+- How Alembic migrations keep database schema changes versioned and reproducible
+- How SQLAlchemy models map Python classes to PostgreSQL tables
+- How FastAPI dependency injection works for shared logic like authentication and database sessions
+
+### Observability
+
+- How Prometheus metrics are exposed from a FastAPI app and why counters and histograms are different
+- How Grafana connects to Prometheus and turns raw metrics into readable panels
+- How structured JSON logging with structlog makes log analysis easier than plain print statements
+- How a live operator dashboard differs from static API documentation
+
+### Infrastructure
+
+- How Docker Compose coordinates multiple services and why the startup order matters
+- How Nginx acts as a reverse proxy and what problems it solves in front of a Python app
+- How Kubernetes Kustomize overlays separate base config from environment-specific patches
+- How GitHub Actions CI runs tests and publishes Docker images automatically on every push
+
 ## Small Architecture Diagram
 
 ```mermaid
@@ -133,9 +167,30 @@ The root dashboard is now an operator screen, not a static landing page.
 - It shows request totals, error counts, latency, uptime, OAuth readiness, and route activity.
 - Prometheus and Grafana links are driven by environment variables instead of hardcoded localhost values inside the frontend.
 
-### 5. Test that the API works
+### 5. Explore the Control Room UI
 
-You can now use Swagger UI or call endpoints like:
+Open `http://localhost:8000` in your browser. The dashboard has four tabs:
+
+| Tab             | What it shows                                                                                                                                                                 |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Overview**    | Live service health, request totals, latency, error counts, OAuth readiness, and top routes — all pulled from the backend in real time                                        |
+| **Auth Lab**    | Register form, login form, session and JWT token display, rate-limit progress bar, quick-fill buttons for seeded users, and an API tester that auto-injects your Bearer token |
+| **Live Charts** | Chart.js time-series graphs for request rate, p95 latency, and error rate — all sourced live from Prometheus via a backend proxy                                              |
+| **Monitoring**  | Embedded Grafana panels for the full observability dashboard                                                                                                                  |
+
+#### Seeded test accounts
+
+Three accounts are pre-seeded after running `alembic upgrade head`. Use them in the Auth Lab or via the API directly:
+
+| Email               | Password       | Notes           |
+| ------------------- | -------------- | --------------- |
+| `admin@example.com` | `Admin1234!`   | Admin-role user |
+| `alice@example.com` | `Alice1234!`   | Standard user   |
+| `bob@example.com`   | `BobPass1234!` | Standard user   |
+
+### 6. Test the API via Swagger
+
+Open `http://localhost/docs` to use the interactive Swagger UI, or call endpoints directly:
 
 - `POST /api/v1/auth/register`
 - `POST /api/v1/auth/login`
@@ -300,6 +355,31 @@ If you use this mode, make sure `.env` points to your own PostgreSQL and Redis i
 - Includes JWT access and refresh token flow with rotation.
 - Ships with Docker Compose and Nginx for realistic local deployment.
 - Keeps the code intentionally readable so you can explain it in interviews.
+
+## Key Concepts
+
+These are the core ideas behind the project. Understanding them is more useful than memorising the code.
+
+**JWT (JSON Web Token)**
+A signed string the server gives to the client after login. The client sends it back on every request. The server verifies the signature without needing a database lookup. It expires quickly (15 minutes here) so a stolen token becomes useless fast.
+
+**Refresh token**
+A longer-lived token stored in PostgreSQL. When the access token expires, the client sends the refresh token to get a new access token. The old refresh token is immediately invalidated (rotated), so if it gets stolen, the attacker only has one use before the legitimate user's next refresh locks them out.
+
+**OAuth2 authorization code flow**
+Instead of giving this app your Google or GitHub password, you approve access directly on the provider's site. The provider sends a short-lived code back to this app. The app exchanges that code for your profile details server-side. A `state` parameter stored in Redis prevents cross-site request forgery during the redirect.
+
+**Rate limiting**
+Redis counts how many auth requests a given IP has made in the last 60 seconds. Once the count exceeds the limit the request is rejected immediately without hitting the database. If Redis is down, the app refuses all auth requests (fail-closed) rather than silently removing the protection.
+
+**Argon2 password hashing**
+Argon2 is designed to be slow and memory-intensive, which makes brute-force attacks expensive even if the hashed passwords are stolen. bcrypt is also common but Argon2 is the current winner of the Password Hashing Competition and is the recommended choice for new projects.
+
+**Repository pattern**
+Database queries live in dedicated repository classes rather than scattered across route handlers. This means swapping the database implementation, adding caching, or writing tests with a fake database requires changing one file instead of many.
+
+**Prometheus metrics**
+The app increments counters and records timing histograms on every request. Prometheus scrapes these numbers on a timer. Grafana queries Prometheus and draws charts. This is the standard observability stack for container-based backends.
 
 ## Tech Stack
 
@@ -741,6 +821,34 @@ Use these ideas in your README summary, LinkedIn post, or interview explanation:
 - Added Kubernetes manifests for container-based deployment.
 - Added GitHub Actions CI to automatically run tests and validate Docker builds.
 - Added GitHub Actions publishing to push Docker images to GitHub Container Registry.
+
+## Interview Questions This Project Prepares You For
+
+These are real questions that come up in backend and security-focused interviews. This project gives you a concrete, working answer to each one.
+
+**"How does JWT authentication work?"**
+Explain the access token / refresh token split, why JWTs are stateless, how the signature is verified, and why short expiry matters. Point to `app/core/security.py` and `app/services/auth_service.py`.
+
+**"How do you prevent brute-force login attacks?"**
+Explain the Redis-backed sliding-window rate limiter, fail-closed behaviour when Redis is unavailable, and per-IP bucketing via trusted proxy headers. Point to `app/core/rate_limiter.py`.
+
+**"What is OAuth2 and how does the authorization code flow work?"**
+Walk through the login → redirect → callback → token exchange sequence. Explain the `state` parameter and why auto-linking by email is a security risk. Point to `app/services/oauth_service.py`.
+
+**"Why do you store refresh tokens in the database if JWTs are stateless?"**
+JWTs alone cannot be revoked before expiry. Storing refresh tokens in PostgreSQL allows logout and rotation. The access token stays stateless; only the longer-lived refresh token needs server-side state.
+
+**"How would you structure a FastAPI project for a team?"**
+Describe the thin-route → service layer → repository layer pattern. Explain why business logic should not live in route handlers and why database queries should not live in services directly.
+
+**"How do you observe a running backend service?"**
+Explain Prometheus counters and histograms, Grafana panels, structured JSON logs, and time-series alerting. Contrast this with print-statement debugging or checking if the server is simply `up`.
+
+**"What is the difference between Docker Compose and Kubernetes?"**
+Docker Compose coordinates services on one machine. Kubernetes keeps containers alive across a cluster, handles rolling updates, separates config from images, and provides service discovery at scale.
+
+**"How do you handle database schema changes safely?"**
+Alembic migration files version every schema change. Rolling back is a single command. Changes are tracked in the repository so every environment applies the same sequence.
 
 ## Planned Features
 
